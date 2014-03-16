@@ -2,18 +2,25 @@
  *
  *
  */
+
+#include "DS1307RTC.h"
+#include "Wire.h"
+#include "DCF77.h"
+#include "Time.h"
  
 //////////////
 // Settings //
 //////////////
 
 // Pin-Settings
-#define VFDPWR  9 // Power On/Off the VCC for the Tube and the Driver
-#define BLANK   7 // Driver: If this is HIGH, the driver sets all Outputs to LOW
-#define LOAD    8 // Driver: Loads the data from shift register to output latch
-#define CLK    13 // Driver: Shifts in a Bit on rising edge
-#define DIN    11 // Driver: Data In (gets shiftet on CLK rising edge)
-#define BOOST  10 // PWM-Signal for boost power supply
+#define VFDPWR    9 // Power On/Off the VCC for the Tube and the Driver
+#define BLANK     7 // Driver: If this is HIGH, the driver sets all Outputs to LOW
+#define LOAD      8 // Driver: Loads the data from shift register to output latch
+#define CLK      13 // Driver: Shifts in a Bit on rising edge
+#define DIN      11 // Driver: Data In (gets shiftet on CLK rising edge)
+#define BOOST    10 // PWM-Signal for boost power supply
+#define DCF_DATA  2 // DCF: Data Pin
+#define DCF_INT   0 // DCF: Interrupt of DCF_DATA Pin
 
 //////////////
 // Mappings //
@@ -54,12 +61,13 @@ uint8_t minus_bitmask = 0b00010000;
 /////////////////
 // Global vars //
 /////////////////
-boolean dot = false;
-boolean minus = true;
+boolean dot = true;
+boolean minus = false;
 
 byte current_digit = 0;
-//byte display_value[8] = {10,10,10,10,10,0,0,0};
-byte display_value[8] = {0,1,2,3,4,5,6,7};
+byte display_value[8] = {0,0,10,0,0,10,0,0};
+
+DCF77 DCF = DCF77(DCF_DATA,DCF_INT);
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -67,18 +75,21 @@ byte display_value[8] = {0,1,2,3,4,5,6,7};
 // Setup //
 ///////////
 void setup(){
-  pinMode(VFDPWR,OUTPUT);
-  pinMode(BLANK ,OUTPUT);
-  pinMode(LOAD  ,OUTPUT);
-  pinMode(CLK   ,OUTPUT);
-  pinMode(DIN   ,OUTPUT);
+  pinMode(VFDPWR,  OUTPUT);
+  pinMode(BLANK,   OUTPUT);
+  pinMode(LOAD,    OUTPUT);
+  pinMode(CLK,     OUTPUT);
+  pinMode(DIN,     OUTPUT);
   
   digitalWrite(VFDPWR, LOW); // Enable VFD-Module
   digitalWrite(BLANK , LOW); // Disable blank
   
+  DCF.Start();
+  RTC.set(0);
+  
   // Divide PWM frequency to prevent inductor from singing
   setPwmFrequency(BOOST, 8);
-//  analogWrite(BOOST,128);
+  analogWrite(BOOST,40);
 }
 
 //////////
@@ -86,13 +97,27 @@ void setup(){
 //////////
 void loop(){
   // Set Boost-Value with Poti and display on Tube
-  byte val = map(analogRead(A1),0,1023,0,255);
-  analogWrite(BOOST,val);
+//  byte val = map(analogRead(A1),0,1023,0,255);
+//  analogWrite(BOOST,val);
   /*
   display_value[7] = val % 10;
   display_value[6] = (val/10) % 10;
   display_value[5] = val/100;
   */
+  
+  time_t DCFtime = DCF.getTime(); // Check if new DCF77 time is available
+  if(DCFtime != 0){
+    RTC.set(DCFtime);
+    dot = false;
+  }
+   
+  time_t rtc_time = RTC.get();
+  display_value[0] = hour(rtc_time)/10;
+  display_value[1] = hour(rtc_time)%10;
+  display_value[3] = minute(rtc_time)/10;
+  display_value[4] = minute(rtc_time)%10;
+  display_value[6] = second(rtc_time)/10;
+  display_value[7] = second(rtc_time)%10;
   
   // Show Value on Tube
   multiplex();
