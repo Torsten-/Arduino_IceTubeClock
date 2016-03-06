@@ -62,6 +62,7 @@ uint8_t minus_bitmask = 0b00010000;
 boolean dot = true;
 boolean minus = false;
 boolean button_pressed = false;
+byte last_minute = 0;
 
 byte current_digit = 0;
 byte display_value[8] = {0,0,10,0,0,10,0,0};
@@ -84,6 +85,8 @@ void setup(){
   // Divide PWM frequency to prevent inductor from singing
   setPwmFrequency(BOOST, 8);
   analogWrite(BOOST,40);
+
+  setTime(RTC.get());
   
   // Buttons
   pinMode(BUTTONS, INPUT);
@@ -102,13 +105,19 @@ void loop(){
   display_value[5] = val/100;
   */
 
-  time_t rtc_time = RTC.get();
-  display_value[0] = hour(rtc_time)/10;
-  display_value[1] = hour(rtc_time)%10;
-  display_value[3] = minute(rtc_time)/10;
-  display_value[4] = minute(rtc_time)%10;
-  display_value[6] = second(rtc_time)/10;
-  display_value[7] = second(rtc_time)%10;
+  // Correct Time from RTC every minute
+  if(last_minute != minute(now())){
+    setTime(RTC.get());
+    last_minute = minute(now());
+  }
+
+  time_t act_time = now();
+  display_value[0] = hour(act_time)/10;
+  display_value[1] = hour(act_time)%10;
+  display_value[3] = minute(act_time)/10;
+  display_value[4] = minute(act_time)%10;
+  display_value[6] = second(act_time)/10;
+  display_value[7] = second(act_time)%10;
   
   // Show Value on Tube
   multiplex();
@@ -117,12 +126,13 @@ void loop(){
   int switches = analogRead(BUTTONS);
   if(switches < 700){
    if(switches < 200 && !button_pressed){ // Hour
-      RTC.set(rtc_time+3600);
+      RTC.set(act_time+3600);
     }else if(switches < 400 && !button_pressed){ // Minute
-      RTC.set(rtc_time+60);
+      RTC.set(act_time+60);
     }else if(!button_pressed){  // Second
-      RTC.set(rtc_time+1);
+      RTC.set(act_time+1);
     }
+    setTime(RTC.get());
     button_pressed = true;
   }else button_pressed = false;
   // Show Value of analogRead on Tube
